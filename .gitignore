@@ -1,0 +1,7 @@
+.Rhistory
+.RData
+.Rproj.user/
+__pycache__/
+*.pyc
+# The SQLite database is rebuilt by code/02_build_database.py
+data/processed/*.db

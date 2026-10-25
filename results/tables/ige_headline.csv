@@ -1,0 +1,6 @@
+spec,ige,se,n,ci_low,ci_high
+"Single year: child age 28, parent (head) age 40",0.237,0.01,4988,0.217,0.257
+"Single year: child age 35, parent (head) age 45",0.288,0.012,4989,0.265,0.311
+"Single year: child age 40, parent (head) age 50",0.354,0.014,4983,0.327,0.381
+"5-year averages: child ages 33-37, parent ages 43-47",0.372,0.012,5112,0.348,0.396
+"Long-run: child ages 30-45, parent ages 40-55",0.433,0.013,5243,0.408,0.458
