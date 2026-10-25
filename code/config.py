@@ -13,6 +13,7 @@ for p in (RAW, PROCESSED, FIGS, TABLES):
     p.mkdir(parents=True, exist_ok=True)
 
 SEED = 20241
-N_FAMILIES = 3000
+N_FAMILIES = 8000
 TRUE_IGE = 0.45          # intergenerational elasticity of *permanent* income built into the simulation
-PANEL_START, PANEL_END = 1965, 2019
+PANEL_START, PANEL_END = 2010, 2019   # a short 10-year panel
+BASE_YEAR = 2010                        # the 'single year' used in the single-year estimates

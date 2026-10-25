@@ -3,6 +3,7 @@ DROP TABLE IF EXISTS child_income;
 CREATE TABLE child_income AS
 SELECT  p.person_id AS child_id,
         i.year,
+        p.birth_year,
         i.year - p.birth_year AS age,
         i.earnings
 FROM    person AS p

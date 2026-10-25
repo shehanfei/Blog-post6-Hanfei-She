@@ -23,7 +23,9 @@ Two tables, as you would build from PSID files:
 | `person` | `person_id`, `origin_family_id`, `role`, `birth_year`, `sex` | one row per individual; `role` is `head`, `spouse`, or `offspring` in the childhood family |
 | `income` | `person_id`, `year`, `earnings` | one row per person-year |
 
-There are 11,230 people, 5,566 of them children, and about 400,000 person-year income records covering 1965-2019. Incomes are missing in some waves for children, as in a real panel. The identifier logic is the key idea: `person_id` identifies *an individual*, and `origin_family_id` identifies *the family unit they grew up in*, so a child and their parents share the second identifier but not the first.
+There are 29,981 people, 14,797 of them children, and about 292,000 person-year income records covering a short **10-year panel, 2010-2019**. Incomes are missing in some waves for children, as in a real panel.
+
+A short panel changes the design in one useful way. Nobody is followed for decades, so the children we observe in 2010 are of **different ages** (born between 1970 and 1992, so aged roughly 18 to 40 in 2010). Comparing children of different ages in the same calendar year is how we will trace out life-cycle bias. Throughout, **2010 is the base year**: the "single-year" estimates use 2010 income, and the "multi-year" estimates average income over 2010 and the years after it. The identifier logic is the key idea: `person_id` identifies *an individual*, and `origin_family_id` identifies *the family unit they grew up in*, so a child and their parents share the second identifier but not the first.
 
 ## Setup: SQL inside Python
 
@@ -85,7 +87,7 @@ LEFT JOIN person AS p
 WHERE  c.role = 'offspring' AND p.person_id IS NULL;
 ```
 
-Result: of 5,566 children, **5,247 match to at least one parent and 319 (5.7%) do not**. In real PSID data the loss is usually larger and not random (for example, children who left home early are harder to link), which matters for how representative the final sample is.
+Result: of 14,797 children, **14,056 match to at least one parent and 741 (5.0%) do not**. In real PSID data the loss is usually larger and not random (for example, children who left home early are harder to link), which matters for how representative the final sample is.
 
 ## Step 3: GROUP BY and aggregation
 
@@ -108,30 +110,33 @@ Children's own income is a simple join of `person` and `income` on `person_id`, 
 
 ### One year versus several years
 
-Here is the key design choice. To use a **single year**, we pick one year of child income and one year of parent income:
+Here is the key design choice. To use a **single year**, we take one calendar year of income (`:year`, here 2010) for both generations. We select children by their *age in that year*, so everyone in the sample is at a similar life-cycle stage:
 
 ```sql
 SELECT c.child_id, c.earnings AS child_income, pf.family_earnings AS parent_income
 FROM   child_income AS c
-JOIN   parent_family_income AS pf ON pf.child_id = c.child_id
-WHERE  c.age = :child_age AND pf.head_age = :parent_age
+JOIN   parent_family_income AS pf
+         ON  pf.child_id = c.child_id AND pf.year = c.year
+WHERE  c.year = :year
+  AND  (:year - c.birth_year) BETWEEN :a_lo AND :a_hi
   AND  c.earnings > 0 AND pf.family_earnings > 0;
 ```
 
-To use **multi-year averages**, we `GROUP BY` the child again, this time averaging over an age window. `HAVING` filters *groups* (just as `WHERE` filters rows), so we can require a minimum number of observed years:
+To use **multi-year averages**, we `GROUP BY` the child again, this time averaging over the years from `:y_lo` to `:y_hi`. `HAVING` filters *groups* (just as `WHERE` filters rows), so we can require a minimum number of observed years:
 
 ```sql
 WITH c AS (
     SELECT child_id, AVG(earnings) AS child_income
     FROM   child_income
-    WHERE  age BETWEEN :c_lo AND :c_hi
+    WHERE  year BETWEEN :y_lo AND :y_hi
+      AND  (:base_year - birth_year) BETWEEN :a_lo AND :a_hi
     GROUP BY child_id
     HAVING COUNT(*) >= :min_c
 ),
 p AS (
     SELECT child_id, AVG(family_earnings) AS parent_income
     FROM   parent_family_income
-    WHERE  head_age BETWEEN :p_lo AND :p_hi
+    WHERE  year BETWEEN :y_lo AND :y_hi
     GROUP BY child_id
     HAVING COUNT(*) >= :min_p
 )
@@ -157,14 +162,15 @@ def estimate_ige(df):
 
 | Specification | IGE | 95% CI | N |
 |---|---|---|---|
-| Single year: child age 28, parent age 40 | 0.237 | [0.217, 0.257] | 4,988 |
-| Single year: child age 35, parent age 45 | 0.288 | [0.265, 0.311] | 4,989 |
-| Single year: child age 40, parent age 50 | 0.354 | [0.327, 0.381] | 4,983 |
-| 5-year averages: child 33-37, parent 43-47 | 0.372 | [0.348, 0.396] | 5,112 |
-| Long-run: child 30-45, parent 40-55 | 0.433 | [0.408, 0.458] | 5,243 |
-| *Benchmark: permanent-income slope in the simulation* | *0.454* | | |
+| Single year (2010), children aged 25-29 | 0.229 | [0.205, 0.252] | 3,787 |
+| Single year (2010), children aged 30-34 | 0.251 | [0.226, 0.276] | 3,882 |
+| Single year (2010), children aged 35-39 | 0.295 | [0.256, 0.334] | 2,255 |
+| 5-year average (2010-2014), children aged 30-34 | 0.365 | [0.338, 0.392] | 4,015 |
+| 10-year average (2010-2019), children aged 30-34 | 0.404 | [0.377, 0.432] | 4,080 |
+| 10-year average (2010-2019), children aged 35-39 | 0.445 | [0.403, 0.487] | 2,358 |
+| *Benchmark: permanent-income slope in the simulation* | *0.455* | | |
 
-The same data and the same method give estimates between **0.24 and 0.43**, depending only on which income measure we use. A researcher who picked the first row would conclude that America (here, the simulated country) is far more mobile than a researcher who picked the last. The last row is also the only one that comes close to the benchmark.
+The same data and the same method give estimates between **0.23 and 0.45**, depending only on which income measure we use. A researcher who used one year of income for children in their late twenties would conclude that the simulated country is about twice as mobile as a researcher who averaged ten years of income for children in their late thirties. Only the last row comes close to the benchmark.
 
 ## Life-cycle bias
 
@@ -181,52 +187,44 @@ where λ is how strongly permanent income shows up in income at the age we measu
 
 ### Evidence: the child's age at measurement
 
-Figure 1 holds the parent side fixed and slides the child's measurement age from 23 to 43.
+Because the panel is short, we cannot follow one person from age 23 to 43. But we can compare children of different ages **in the same year**. Figure 1 estimates the IGE separately for groups of children aged 24-28, 25-29, ..., 35-39 in 2010 (labeled by the central age), once with single-year income and once with 10-year average income.
 
 ![IGE by child age](results/figures/fig1_ige_by_child_age.png)
 
-*Figure 1. IGE estimated at different ages of the child. Shaded bands are 95% confidence intervals. The dashed line is the permanent-income elasticity built into the simulation.*
+*Figure 1. IGE estimated for children of different ages in 2010. Shaded bands are 95% confidence intervals. The dashed line is the permanent-income elasticity built into the simulation.*
 
-The red line (single year) climbs steadily from **0.19 at age 23 to 0.33 at age 41**. The estimate nearly doubles just because children are older when we look at them. This is life-cycle bias in action: researchers who use data on children in their 20s, as many early studies did, will understate persistence. The blue line, which averages five years of child income and ten-plus years of parent income, shows the same upward drift (0.26 at 23 to 0.47 at 41) but sits far above the red line and reaches the true value around ages 38 to 41, which is when λ reaches 1 in this simulation.
+The red line (single-year income) rises from **0.23 for children centered at age 26 to 0.30 at age 37**. The estimate climbs just because the children we look at are older. This is life-cycle bias at work: a study using data on children in their twenties will understate how strongly income is passed on. The blue line, which averages ten years of income for both generations, shows the same pattern in a more dramatic form (0.34 at age 26, 0.445 at age 37), because even a ten-year window starting at 26 still covers early-career years when current income is a poor guide to lifetime income. It reaches the benchmark only for the oldest group, whose ten-year window sits closest to mid-career.
 
-Two lessons follow. First, the age gradient is the signature of life-cycle bias: it should not exist if single-year income were a clean measure of long-run status. Second, even at the oldest ages, the red line stays well below 0.45. Age bias has mostly disappeared by then, so the remaining gap is the attenuation from using a single noisy year.
-
-### Evidence: the parent's age at measurement
-
-Figure 2 does the opposite: it fixes the child's income (a 10-year average, ages 33-43) and slides the age at which parent income is measured.
-
-![IGE by parent age](results/figures/fig2_ige_by_parent_age.png)
-
-*Figure 2. IGE estimated at different ages of the parent (head).*
-
-The parent side is less dramatic in this simulation. The single-year estimates are flat at about 0.31 to 0.35 across ages, because attenuation from the noisy single year dominates everything else. The five-year-average line is much higher and shows a mild pattern consistent with the theory: it is slightly above the benchmark when parents are measured young, at 32 (0.46), and settles near 0.41 after age 40. I would not push this result too far: it comes from one simulated dataset, and the child-age effect is much larger.
+Two lessons follow. First, the **age gradient is the signature of life-cycle bias**: it would not exist if one year of income were a clean measure of long-run status. Second, even for the oldest group the red line stays far below 0.455. By then the age bias has mostly shrunk, so most of the remaining gap is attenuation from relying on a single noisy year. A note on the parents: in this design every head of household is between 48 and 64 in 2010, which is already past the age at which current income tracks permanent income closely. So the life-cycle problem in this tutorial comes from the *children's* side, which is also where it is usually most severe in real data, since children are often observed early in their careers.
 
 ## Why averaging over several years helps
 
-Averaging solves the attenuation problem directly. If transitory shocks are only partly correlated from year to year, they partly cancel when we average, while permanent income does not change. The noise-to-signal ratio in the regressor falls, and the slope moves back toward the truth. Averaging over a *range of ages* also reduces life-cycle bias because it mixes years when the profile is steep with years when it is flat.
+Averaging solves the attenuation problem directly. If transitory shocks are only partly correlated from year to year, they partly cancel when we average, while permanent income does not change. The noise-to-signal ratio in the regressor falls, and the slope moves back toward the truth. Averaging over a *range* of years also dampens life-cycle bias a little, because it mixes years when the age-earnings profile is steep with years when it is flatter, although it cannot fully remove it for children who start young (the blue line in Figure 1).
 
-Figure 3 isolates the attenuation channel: it averages parent income over more and more years starting at age 40, with the child's income fixed as a nine-year average.
+Figure 2 isolates the attenuation channel. It uses children aged 35-39 in 2010 and averages both generations' income over more and more years, starting in 2010.
 
-![IGE by years averaged](results/figures/fig3_ige_by_years_averaged.png)
+![IGE by years averaged](results/figures/fig2_ige_by_years_averaged.png)
 
-*Figure 3. IGE as the number of averaged parent-income years increases.*
+*Figure 2. IGE as the number of averaged income years increases (children aged 35-39 in 2010).*
 
-| Years of parent income averaged | IGE |
+| Years of income averaged | IGE |
 |---|---|
-| 1 | 0.334 |
-| 3 | 0.402 |
-| 5 | 0.420 |
-| 10 | 0.444 |
-| 15 | 0.457 |
+| 1 | 0.295 |
+| 2 | 0.338 |
+| 3 | 0.365 |
+| 5 | 0.405 |
+| 7 | 0.429 |
+| 10 | 0.445 |
 
-Going from one year to three raises the estimate by 0.07, and each additional year helps by less. This diminishing return is typical: most of the transitory noise in a series with moderate persistence is removed by the first few years of averaging. By 15 years the estimate is within the noise of the benchmark. The practical rule from this and from the literature (Solon, 1992; Mazumder, 2005) is to average income over as many years as the data permit, and to measure both generations in mid-career, when income is closest to a person's long-run level.
+Going from one year to three raises the estimate by 0.07, and every additional year still helps, with gains getting smaller. Ten years brings the estimate to 0.445, close to the benchmark of 0.455 and well within its confidence interval. The practical rule from this and from the literature (Solon, 1992; Mazumder, 2005) is to average income over as many years as the data permit, and to measure people in mid-career, when income is closest to long-run level. Note the trade-off: in a short panel, longer averages require more years of observation per person, so the sample here shrinks to children who are observed in most years.
 
 ## Pitfalls and limitations
 
-- **Simulated data.** The patterns here follow from the data-generating process I chose, so the magnitudes (0.19, 0.33, and so on) should not be read as estimates of actual IGEs. The *direction* of the biases, however, matches what the literature documents for real data.
-- **Match selection.** 5.7% of children had no parent record. In real data, who is matched is rarely random.
-- **Constrained samples.** Requiring many years of data for both generations shrinks and reshapes the sample (here it is mild, with N between roughly 5,000 and 5,250 across specifications).
+- **Simulated data.** The patterns here follow from the data-generating process I chose, so the magnitudes (0.23, 0.30, and so on) should not be read as estimates of actual IGEs. The *direction* of the biases, however, matches what the literature documents for real data.
+- **Match selection.** 5.0% of children had no parent record. In real data, who is matched is rarely random.
+- **Constrained samples.** Requiring many years of data for both generations shrinks and reshapes the sample (here N falls from about 4,000 to about 2,300 for the oldest group of children).
 - **Zeros and logs.** Dropping non-positive incomes is common but has consequences, and averaging in levels versus logs gives different answers.
+- **Short panel.** With ten years of data we compare children of different ages in the same year rather than following people over their lives. That mixes age with birth cohort, so the age gradient in Figure 1 could partly reflect cohort differences in real data (in the simulation there are none).
 - **Family income versus individual earnings.** I used the sum of both parents' earnings for parents and individual earnings for children; other choices (household income, sons only, father-only) give different elasticities.
 - **Standard errors.** Siblings share parents, so errors are probably correlated within families. Clustering by `origin_family_id` would be the next refinement.
 
@@ -234,9 +232,9 @@ Going from one year to three raises the estimate by 0.07, and each additional ye
 
 SQL does two jobs in this workflow. `JOIN` builds the link between generations from person and family identifiers, with a `LEFT JOIN` audit to show what the match loses. `GROUP BY` with `SUM`, `AVG`, and `HAVING` turns a person-year panel into one analysis row per child, whether we want a single year or an average over many. Both steps are explicit, reproducible, and easy to check, which is much harder when the match is buried in a long script of data-frame edits.
 
-The substantive lesson is that the IGE is only as good as the income measure behind it. With the same sample and the same regression, single-year estimates ranged from 0.19 to 0.33 depending on the age at which children were observed (Figure 1), and from 0.24 to 0.35 across the three single-year rows in the headline table. A long-run average gave 0.43, close to the 0.45 truth. Two distinct forces explain the gap: life-cycle bias, because lifetime earnings differences only show up in annual income later in life, and attenuation bias, because a single year is noisy. The first is fixed by measuring people at the right stage of life, and the second by averaging over several years. A researcher who ignores either will report a country as more mobile than it really is.
+The substantive lesson is that the IGE is only as good as the income measure behind it. With the same data and the same regression, the single-year estimate for children in their late twenties was 0.23, while a ten-year average for children in their late thirties gave 0.445, close to the 0.455 benchmark. Two distinct forces explain the gap: life-cycle bias, because lifetime earnings differences only show up in annual income later in life, and attenuation bias, because a single year is noisy. The first is addressed by measuring people at the right stage of life, and the second by averaging over several years. A researcher who ignores either will report a country as more mobile than it really is.
 
-For readers doing their own work, the checklist is short: match on identifiers and audit the loss; build income measures in SQL with explicit age windows; average over as many years as possible; measure both generations in mid-career; and always plot the estimate against age at measurement, because a visible slope is a warning that the single-year number is unreliable.
+For readers doing their own work, the checklist is short: match on identifiers and audit the loss; build income measures in SQL with explicit age windows; average over as many years as possible; measure people in mid-career; and always plot the estimate against age at measurement (even in a short panel, by comparing age groups in the same year), because a visible slope is a warning that the single-year number is unreliable.
 
 ## Replication
 

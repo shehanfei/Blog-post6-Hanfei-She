@@ -1,4 +1,7 @@
-"""Simulate a PSID-style longitudinal file.
+"""Simulate a PSID-style longitudinal file covering a SHORT panel (2010-2019).
+
+Because the panel is short, children of different birth cohorts are observed at different ages in the
+base year (2010). Comparing cohorts at the same calendar year is how we trace out life-cycle bias.
 
 WHY SIMULATE? The real PSID requires registration and a data-use agreement, so it cannot be
 redistributed in a repository. This script creates two tables with the same structure you would
@@ -45,7 +48,7 @@ pid = 0
 years = np.arange(PANEL_START, PANEL_END + 1)
 
 for fam in range(1, N_FAMILIES + 1):
-    head_birth = int(rng.integers(1936, 1945))
+    head_birth = int(rng.integers(1946, 1963))
     theta_f = rng.normal(0, SIGMA_THETA)
     # Roughly 5% of families: parents never enter the data (child-only records) -> unmatched kids
     parents_observed = rng.random() > 0.05
@@ -60,7 +63,7 @@ for fam in range(1, N_FAMILIES + 1):
 
     for _ in range(int(rng.choice([1, 2, 3], p=[0.35, 0.45, 0.20]))):
         pid += 1
-        cb = head_birth + int(rng.integers(24, 31))
+        cb = head_birth + int(rng.integers(24, 31))   # children born 1970-1992
         persons.append((pid, fam, "offspring", cb, rng.choice(["M", "F"])))
         theta_c = TRUE_IGE * theta_f + rng.normal(0, SIGMA_THETA * np.sqrt(1 - TRUE_IGE**2))
         members.append((pid, "offspring", cb, theta_c))
@@ -70,7 +73,7 @@ for fam in range(1, N_FAMILIES + 1):
         u = ar1(len(years))
         for t, yr in enumerate(years):
             age = yr - birth
-            if age < 20 or age > 64:
+            if age < 20 or age > 75:
                 continue
             if role == "spouse":
                 # Spouse works 70% of years; otherwise 0 earnings
