@@ -195,7 +195,7 @@ Figure 2 does the opposite: it fixes the child's income (a 10-year average, ages
 
 *Figure 2. IGE estimated at different ages of the parent (head).*
 
-The parent side is less dramatic in this simulation. The single-year estimates are flat at about 0.31 to 0.33 across ages, because attenuation from the noisy single year dominates everything else. The five-year-average line is much higher and shows a mild pattern consistent with the theory: it is slightly above the benchmark when parents are measured young, at 32 (0.46), and settles near 0.41 after age 40. When parents are measured young, their current income overstates how spread out permanent incomes are in the opposite direction from the child case. I would not push this result too far: it comes from one simulated dataset, and the child-age effect is much larger.
+The parent side is less dramatic in this simulation. The single-year estimates are flat at about 0.31 to 0.35 across ages, because attenuation from the noisy single year dominates everything else. The five-year-average line is much higher and shows a mild pattern consistent with the theory: it is slightly above the benchmark when parents are measured young, at 32 (0.46), and settles near 0.41 after age 40. I would not push this result too far: it comes from one simulated dataset, and the child-age effect is much larger.
 
 ## Why averaging over several years helps
 
@@ -221,7 +221,7 @@ Going from one year to three raises the estimate by 0.07, and each additional ye
 
 - **Simulated data.** The patterns here follow from the data-generating process I chose, so the magnitudes (0.19, 0.33, and so on) should not be read as estimates of actual IGEs. The *direction* of the biases, however, matches what the literature documents for real data.
 - **Match selection.** 5.7% of children had no parent record. In real data, who is matched is rarely random.
-- **Constrained samples.** Requiring many years of data for both generations shrinks and reshapes the sample (here it is mild, with N around 5,200 in every specification).
+- **Constrained samples.** Requiring many years of data for both generations shrinks and reshapes the sample (here it is mild, with N between roughly 5,000 and 5,250 across specifications).
 - **Zeros and logs.** Dropping non-positive incomes is common but has consequences, and averaging in levels versus logs gives different answers.
 - **Family income versus individual earnings.** I used the sum of both parents' earnings for parents and individual earnings for children; other choices (household income, sons only, father-only) give different elasticities.
 - **Standard errors.** Siblings share parents, so errors are probably correlated within families. Clustering by `origin_family_id` would be the next refinement.
@@ -230,7 +230,7 @@ Going from one year to three raises the estimate by 0.07, and each additional ye
 
 SQL does two jobs in this workflow. `JOIN` builds the link between generations from person and family identifiers, with a `LEFT JOIN` audit to show what the match loses. `GROUP BY` with `SUM`, `AVG`, and `HAVING` turns a person-year panel into one analysis row per child, whether we want a single year or an average over many. Both steps are explicit, reproducible, and easy to check, which is much harder when the match is buried in a long script of data-frame edits.
 
-The substantive lesson is that the IGE is only as good as the income measure behind it. With the same sample and the same regression, single-year estimates ranged from 0.19 to 0.35 depending on the age at which children were observed, and from 0.24 to 0.35 across the three single-year rows in the headline table. A long-run average gave 0.43, close to the 0.45 truth. Two distinct forces explain the gap: life-cycle bias, because lifetime earnings differences only show up in annual income later in life, and attenuation bias, because a single year is noisy. The first is fixed by measuring people at the right stage of life, and the second by averaging over several years. A researcher who ignores either will report a country as more mobile than it really is.
+The substantive lesson is that the IGE is only as good as the income measure behind it. With the same sample and the same regression, single-year estimates ranged from 0.19 to 0.33 depending on the age at which children were observed (Figure 1), and from 0.24 to 0.35 across the three single-year rows in the headline table. A long-run average gave 0.43, close to the 0.45 truth. Two distinct forces explain the gap: life-cycle bias, because lifetime earnings differences only show up in annual income later in life, and attenuation bias, because a single year is noisy. The first is fixed by measuring people at the right stage of life, and the second by averaging over several years. A researcher who ignores either will report a country as more mobile than it really is.
 
 For readers doing their own work, the checklist is short: match on identifiers and audit the loss; build income measures in SQL with explicit age windows; average over as many years as possible; measure both generations in mid-career; and always plot the estimate against age at measurement, because a visible slope is a warning that the single-year number is unreliable.
 
